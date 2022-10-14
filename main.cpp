@@ -2,7 +2,7 @@
 
 /*
 
-TODO: file Rediretion
+TODO: pipe without numberPipe
 
 
 * Seems like multiple pipe need to pass the inputCommand to there child process
@@ -16,6 +16,13 @@ TODO: 讓每個child process在其parent process還在運行的時候就透過pi
 * 參考: https://stackoverflow.com/questions/7292642/grabbing-output-from-exec
 
 */
+
+struct myCommandLine{
+    vector<string>inputCommand;
+    bool backPipe=false;
+    bool frontPip=false;
+    
+};
 
 int main()
 {
@@ -66,18 +73,18 @@ void myCout(T s)
         return;
 }
 
-void executeFunction(vector<string> tag)
+void executeFunction(myCommandLine tag)
 {
 
     // cout << parm.size() << endl;
-    const char **arg = new const char *[tag.size()+1];
+    const char **arg = new const char *[tag.inputCommand.size()+1];
     int  fd;
-    for (int i = 0; i < tag.size(); i++)
+    for (int i = 0; i < tag.inputCommand.size(); i++)
     {
         // TODO: File Rediretion
-        if (tag[i] == ">")
+        if (tag.inputCommand[i] == ">")
         {
-            fd = open(tag[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
+            fd = open(tag.inputCommand[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
             if(fd < 0){
                 cerr<<"open failed" << endl;
             }
@@ -91,11 +98,11 @@ void executeFunction(vector<string> tag)
             break;
         }
 
-        arg[i] = tag[i].c_str();
+        arg[i] = tag.inputCommand[i].c_str();
         // cout<<tag[i].c_str()<<endl;
         // cout<<argv[i]<<endl;
     }
-    arg[tag.size()] = NULL;
+    arg[tag.inputCommand.size()] = NULL;
 
     char **show = (char **)arg;
     // for (int i = 0; i < tag.size(); i++)
@@ -103,7 +110,7 @@ void executeFunction(vector<string> tag)
     //     cout << (arg[i]) << endl;
     // }
 
-    if (execvp(tag[0].c_str(), (char **)arg) == -1)
+    if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
         cerr << "Unknown Command" << endl;
         exit(-1);
@@ -132,13 +139,13 @@ int parseCommand(vector<string> SeperateInput)
     int status = 0;
 
     int count = 0, parseCommandLine = 0;
-    vector<vector<string>> parseCommand;
+    vector<myCommandLine> parseCommand;
     parseCommand.resize(1);
     while (count < SeperateInput.size())
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
-            vector<string> newCommand;
+            myCommandLine newCommand;
             parseCommand.push_back(newCommand);
             parseCommandLine++;
 
@@ -148,7 +155,7 @@ int parseCommand(vector<string> SeperateInput)
             //! 但我暫時還沒要處理pipe所以先不管
         }
         // cout<<SeperateInput[count]<<endl;
-        parseCommand[parseCommandLine].push_back(SeperateInput[count]);
+        parseCommand[parseCommandLine].inputCommand.push_back(SeperateInput[count]);
         count++;
     }
 
