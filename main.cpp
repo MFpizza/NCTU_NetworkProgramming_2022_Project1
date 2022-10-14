@@ -2,6 +2,8 @@
 
 /*
 
+TODO: file Rediretion
+
 
 * Seems like multiple pipe need to pass the inputCommand to there child process
 * so that the parent process could do nothing until the all child processes are done
@@ -14,6 +16,99 @@ TODO: 讓每個child process在其parent process還在運行的時候就透過pi
 * 參考: https://stackoverflow.com/questions/7292642/grabbing-output-from-exec
 
 */
+
+int main()
+{
+    clearenv();
+    setenv("PATH", "bin:.", 1);
+    // printf("%s\n", getenv("PATH"));
+    //  about fork and process variable
+
+    // tmp variable
+    string s;
+    stringstream ss;
+    char inputLine[15000];
+    cout << "% ";
+
+    while (getline(cin, s))
+    {
+        vector<string> lineSplit;
+        // 分割當前的指令
+        string delimiter = " ";
+
+        size_t pos = 0;
+        string token;
+        while ((pos = s.find(delimiter)) != string::npos)
+        {
+            token = s.substr(0, pos);
+            lineSplit.push_back(token);
+            // myCout(token);
+            s.erase(0, pos + delimiter.length());
+        }
+
+        lineSplit.push_back(s);
+        // myCout(s);
+
+        parseCommand(lineSplit);
+        //--------------------------------------------------------
+
+        cout << "% ";
+    }
+}
+
+template <typename T>
+void myCout(T s)
+{
+    bool needCout = true;
+    if (needCout)
+        cout << s << endl;
+    else
+        return;
+}
+
+void executeFunction(vector<string> tag)
+{
+
+    // cout << parm.size() << endl;
+    const char **arg = new const char *[tag.size()+1];
+    int  fd;
+    for (int i = 0; i < tag.size(); i++)
+    {
+        // TODO: File Rediretion
+        if (tag[i] == ">")
+        {
+            fd = open(tag[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
+            if(fd < 0){
+                cerr<<"open failed" << endl;
+            }
+            
+            if (dup2(fd, 1) < 0)
+            {
+                cerr << "dup error" << endl;
+            }
+            close(fd);
+            arg[i]=NULL;
+            break;
+        }
+
+        arg[i] = tag[i].c_str();
+        // cout<<tag[i].c_str()<<endl;
+        // cout<<argv[i]<<endl;
+    }
+    arg[tag.size()] = NULL;
+
+    char **show = (char **)arg;
+    // for (int i = 0; i < tag.size(); i++)
+    // {
+    //     cout << (arg[i]) << endl;
+    // }
+
+    if (execvp(tag[0].c_str(), (char **)arg) == -1)
+    {
+        cerr << "Unknown Command" << endl;
+        exit(-1);
+    };
+}
 
 int parseCommand(vector<string> SeperateInput)
 {
@@ -65,7 +160,7 @@ int parseCommand(vector<string> SeperateInput)
     //         cout << "line " << j << ":" << parseCommand[i][j] << " ";
     //         cout << endl;
     //     }
-        
+
     // }
 
     for (int i = 0; i < parseCommand.size(); i++)
@@ -95,77 +190,4 @@ int parseCommand(vector<string> SeperateInput)
     {
     };
     return 1;
-}
-
-void executeFunction(vector<string> tag)
-{
-    //cout << parm.size() << endl;
-    const char **arg = new const char* [tag.size()];
-
-    for (int i = 0; i < tag.size(); i++)
-    {
-        arg[i] = tag[i].c_str();
-        // cout<<tag[i].c_str()<<endl;
-        // cout<<argv[i]<<endl;
-    }
-    // arg[tag.size()] = NULL;
-    // for (int i = 0; i < parm.size() - 1; i++)
-    // {
-    //     cout << (argv[i]) << endl;
-    // }
-    // cout << "parm[0]:" << parm[0].c_str() << endl;
-    if (execvp(tag[0].c_str(), (char**)arg) == -1)
-    {
-        cerr << "Unknown Command" << endl;
-        exit(-1);
-    };
-}
-
-int main()
-{
-    clearenv();
-    setenv("PATH", "bin:.", 1);
-    // printf("%s\n", getenv("PATH"));
-    //  about fork and process variable
-
-    // tmp variable
-    string s;
-    stringstream ss;
-    char inputLine[15000];
-    cout << "% ";
-
-    while (getline(cin, s))
-    {
-        vector<string> lineSplit;
-        // 分割當前的指令
-        string delimiter = " ";
-
-        size_t pos = 0;
-        string token;
-        while ((pos = s.find(delimiter)) != string::npos)
-        {
-            token = s.substr(0, pos);
-            lineSplit.push_back(token);
-            // myCout(token);
-            s.erase(0, pos + delimiter.length());
-        }
-
-        lineSplit.push_back(s);
-        // myCout(s);
-
-        parseCommand(lineSplit);
-        //--------------------------------------------------------
-
-        cout << "% ";
-    }
-}
-
-template <typename T>
-void myCout(T s)
-{
-    bool needCout = true;
-    if (needCout)
-        cout << s << endl;
-    else
-        return;
 }

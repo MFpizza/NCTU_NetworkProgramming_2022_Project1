@@ -7,8 +7,9 @@
 #include <filesystem>
 #include <stdlib.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <vector>
-
+#include <fcntl.h>
 using namespace std;
 
 void sig_handler(int signum);
@@ -17,3 +18,4 @@ template <typename T>
 void myCout(T s);
 
 void executeFunction(vector<string> parm);
+int parseCommand(vector<string> SeperateInput);
