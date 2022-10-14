@@ -11,9 +11,9 @@
 
 using namespace std;
 
-void sig_handler_parent(int signum);
-
-void sig_handler_child(int signum);
+void sig_handler(int signum);
 
 template <typename T>
 void myCout(T s);
+
+void executeFunction(vector<string> parm);

@@ -1,2 +1,2 @@
-g++ -o npshell main.cpp
-./npshell
+g++ -o npshell main.cpp -g
+./npshell 

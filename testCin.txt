@@ -1,0 +1,4 @@
+printenv PATH
+setenv PATH bin
+ls 123
+ls bin
