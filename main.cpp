@@ -17,15 +17,42 @@ TODO: 讓每個child process在其parent process還在運行的時候就透過pi
 
 */
 
-struct myCommandLine{
-    vector<string>inputCommand;
-    bool backPipe=false;
-    bool frontPip=false;
-    
+struct myCommandLine
+{
+    vector<string> inputCommand; // store the command line
+    bool backPipe = false;       // true if there is a pipe command in front of the command
+    bool frontPipe = false;      // true if there is a pipe command behind of the command
+    int FP = -1;                 // Front Pipe number
+    int BP = -1;                 // Back Pipe number
+
+    //* use to implement NumberPipe
+    bool numberPipe = false;
+    int numberPipeIndex = -1;
 };
 
+void outputMyCommandLineOfPipe(myCommandLine my)
+{
+    cout << "Pipe information:\n";
+    cout << "backPipe is " << my.backPipe << ",number of Pipe is " << my.BP << endl;
+    cout << "frontPipe is " << my.frontPipe << ",number of Pipe is " << my.FP << endl;
+}
+struct sigaction siga;
+
+void f(int sig) {
+    printf("Caught signal %d\n", sig);
+}
+
+// sets f as handler to all the possible signals.
+void myfunct(void(*f)(int sig)) {
+    siga.sa_handler = f;
+    for (int sig = 1; sig <= SIGRTMAX; ++sig) {
+        // this might return -1 and set errno, but we don't care
+        sigaction(sig, &siga, NULL);
+    }
+}
 int main()
 {
+    //myfunct(f);
     clearenv();
     setenv("PATH", "bin:.", 1);
     // printf("%s\n", getenv("PATH"));
@@ -75,26 +102,26 @@ void myCout(T s)
 
 void executeFunction(myCommandLine tag)
 {
-
-    // cout << parm.size() << endl;
-    const char **arg = new const char *[tag.inputCommand.size()+1];
-    int  fd;
+    // cerr<< tag.inputCommand[0]<<endl;
+    const char **arg = new const char *[tag.inputCommand.size() + 1];
+    int fd;
     for (int i = 0; i < tag.inputCommand.size(); i++)
     {
         // TODO: File Rediretion
         if (tag.inputCommand[i] == ">")
         {
             fd = open(tag.inputCommand[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
-            if(fd < 0){
-                cerr<<"open failed" << endl;
+            if (fd < 0)
+            {
+                cerr << "open failed" << endl;
             }
-            
+
             if (dup2(fd, 1) < 0)
             {
                 cerr << "dup error" << endl;
             }
             close(fd);
-            arg[i]=NULL;
+            arg[i] = NULL;
             break;
         }
 
@@ -105,11 +132,7 @@ void executeFunction(myCommandLine tag)
     arg[tag.inputCommand.size()] = NULL;
 
     char **show = (char **)arg;
-    // for (int i = 0; i < tag.size(); i++)
-    // {
-    //     cout << (arg[i]) << endl;
-    // }
-
+    // cerr<<" ready to execute"<<endl;
     if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
         cerr << "Unknown Command" << endl;
@@ -138,21 +161,25 @@ int parseCommand(vector<string> SeperateInput)
     pid_t pid, wpid;
     int status = 0;
 
-    int count = 0, parseCommandLine = 0;
+    int count = 0, parseCommandLine = 0, pipeNumber = 0;
     vector<myCommandLine> parseCommand;
     parseCommand.resize(1);
     while (count < SeperateInput.size())
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
+            parseCommand[parseCommandLine].backPipe = true;
+            parseCommand[parseCommandLine].BP = pipeNumber;
             myCommandLine newCommand;
+            newCommand.FP = pipeNumber;
+            newCommand.frontPipe = true;
             parseCommand.push_back(newCommand);
             parseCommandLine++;
 
-            //! 這個只是暫時先跳過pipe
             count++;
-            //! 還需要紀錄pipe前後的資訊
-            //! 但我暫時還沒要處理pipe所以先不管
+            pipeNumber++; // 紀錄需要創建幾個pipe
+
+            //! 正在處理pipe 所以跳過pipe資訊並跳過numberPipe
         }
         // cout<<SeperateInput[count]<<endl;
         parseCommand[parseCommandLine].inputCommand.push_back(SeperateInput[count]);
@@ -172,18 +199,58 @@ int parseCommand(vector<string> SeperateInput)
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        pid = fork();
+        int pipeArray[pipeNumber][2];
 
+        // outputMyCommandLineOfPipe(parseCommand[i]);
+
+        if (parseCommand[i].backPipe)
+        {
+            int fdPipe = pipe(pipeArray[parseCommand[i].BP]);
+            // cout<<fdPipe<<endl;
+            if (fdPipe == -1)
+            {
+                cerr << "pipe generate failed" << endl;
+            }
+        }
+        pid = fork();
+        // cout<<"child pid "<< pid<<endl;
         if (pid == 0) // child process
         {
+            // * front Pipe
+            if (parseCommand[i].frontPipe)
+            {
+                int FPNumber = parseCommand[i].FP;
+                // cout<<"front pipe "<< FPNumber<<endl;
+                close(pipeArray[FPNumber][1]);
+                dup2(pipeArray[FPNumber][0], 0);
+                // cerr<<"dup2 fp endl"<<endl<<endl;
+                close(pipeArray[FPNumber][0]);
+            }
+
+            // * back Pipe
+            if (parseCommand[i].backPipe)
+            {
+                int BPNumber = parseCommand[i].BP;
+                // cout<<"back Pipe "<< BPNumber<<endl;
+                close(pipeArray[BPNumber][0]);
+                dup2(pipeArray[BPNumber][1],1);
+                // cerr<<"dup2 bp endl"<<endl<<endl;
+                close(pipeArray[BPNumber][1]);
+            }
+
             //! 暫時還沒處理pipe 連接stdin stdout的問題
-            // TODO: if 還有多的指令，可能是採用continue去繼續fork並運行 else 結束子processes
+            // TODO: 如果有pipe就看是要將輸出對應到哪個pipe
 
             executeFunction(parseCommand[i]);
+            cerr << parseCommand[i].inputCommand[0] << " exec error" << endl;
             exit(0);
         }
         else if (pid > 0) // parent  process
         {
+            // close(pipeArray[0][0]);
+            // close(pipeArray[0][1]);
+            sleep(2);
+            // cout << "parent process continue to run the next Command" << endl;
         }
         else // fork error
         {
@@ -192,9 +259,14 @@ int parseCommand(vector<string> SeperateInput)
         }
     }
 
+    cout << endl
+         << "all command run" << endl;
+
     //* 等待所有child process exit
     while ((wpid = wait(&status)) > 0)
     {
     };
+    cout << endl
+         << "child process every exit" << endl;
     return 1;
 }
