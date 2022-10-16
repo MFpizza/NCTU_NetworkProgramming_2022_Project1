@@ -18,7 +18,6 @@ int parseCommand(vector<string> SeperateInput);
 
 TODO: numberPipe withOut !
 
-
 * Seems like multiple pipe need to pass the inputCommand to there child process
 * so that the parent process could do nothing until the all child processes are done
 * then continue to get the next inputCommand from user
@@ -28,6 +27,9 @@ TODO: Make Try to make child process can fork there child process and execute th
 
 TODO: 讓每個child process在其parent process還在運行的時候就透過pipe去獲取parent的資料，以免沒法pipe太多的東西
 * 參考: https://stackoverflow.com/questions/7292642/grabbing-output-from-exec
+
+TODO: 我好像把numberPipe的一切想得太美好，回去可能有很多bug或inform要確認
+! 使用vector去存numberPipe會遇到兩個以上的numberPipe沒法在第一個做完之後去erase numberPipeArray
 
 */
 
@@ -40,8 +42,8 @@ struct myCommandLine
     int BP = -1;                 // Back Pipe number
 
     //* use to implement NumberPipe
-    bool numberPipe = false;     // true if there is a number pipe command
-    int numberPipeIndex = -1;    // 還在思考要用甚麼方式來儲存numberPipe
+    bool numberPipe = false;  // true if there is a number pipe command
+    int numberPipeIndex = -1; // 還在思考要用甚麼方式來儲存numberPipe
 };
 
 void outputMyCommandLineOfPipe(myCommandLine my)
@@ -55,15 +57,10 @@ int main()
 {
     clearenv();
     setenv("PATH", "bin:.", 1);
-    // printf("%s\n", getenv("PATH"));
-    //  about fork and process variable
 
     // tmp variable
     string s;
-    stringstream ss;
-    char inputLine[15000];
     cout << "% ";
-
     while (getline(cin, s))
     {
         vector<string> lineSplit;
@@ -123,22 +120,44 @@ void executeFunction(myCommandLine tag)
     // cerr<<" ready to execute "<<tag.inputCommand[0]<<endl;
     if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
-        cerr << "Unknown Command" << endl;
+        cerr << "Unknown Command: [" << tag.inputCommand[0] << "]." << endl;
         exit(-1);
     };
-    cerr << " error with command: " << tag.inputCommand[0] << endl;
+    // cerr << " error with command: " << tag.inputCommand[0] << endl;
 }
 
-struct myNumberPipe{
+struct myNumberPipe
+{
     int number;
-    int UseTOPipe[2];
-    //TODO : 或許可以將其改成pipe在struct裡面
+    int IndexOfGlobalPipe;
+    // TODO : 或許可以將其改成pipe在struct裡面
     //! 只是這樣子要用C實作的時候挺麻煩
 };
 vector<myNumberPipe> NumberPipeArray;
-// int GlobalPipe[1000][2];
+int GlobalPipe[1000][2];
 // //! 未來需要修改成可以調整成要開幾個pipe的方式
-// int GlobalPipeSize = 0;
+bool GlobalPipeUsed[1000];
+
+int findTheGlobalPipeCanUse()
+{
+    for (int i = 0; i < 1000; i++)
+    {
+        if (!GlobalPipeUsed[i])
+        {
+            GlobalPipeUsed[i] = !GlobalPipeUsed[i];
+
+            if (pipe(GlobalPipe[i]) == -1)
+            {
+                cerr << "GlobalPipe gen failed" << endl;
+                exit(-1);
+            }
+
+            return i;
+        }
+    }
+    cerr << "All GlobalPipe Used" << endl;
+    return -1;
+}
 
 int parseCommand(vector<string> SeperateInput)
 {
@@ -170,21 +189,22 @@ int parseCommand(vector<string> SeperateInput)
         {
             // * 實作numberPipe
             if (SeperateInput[count].size() > 1)
-            { 
-                int Number = (SeperateInput[count][1])-'0';
-                cerr<<Number<<endl;
-                parseCommand[parseCommandLine].numberPipe = true;
-                parseCommand[parseCommandLine].numberPipeIndex = NumberPipeArray.size();
-            
+            {
+                int Number = (SeperateInput[count][1]) - '0';
+                // cerr<<Number<<endl;
+
+                int GlobalPipeIndex = findTheGlobalPipeCanUse();
+
                 myNumberPipe nP;
                 nP.number = Number;
-                if(pipe(nP.UseTOPipe)==-1){
-                    cerr<<"pipe error with numberPipe"<<endl<<endl;
-                }
+                nP.IndexOfGlobalPipe = GlobalPipeIndex;
                 NumberPipeArray.push_back(nP);
+
+                parseCommand[parseCommandLine].numberPipe = true;
+                parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
             }
 
-            //* 實作普通的pipe 
+            //* 實作普通的pipe
             if (count != SeperateInput.size() - 1)
             {
                 parseCommand[parseCommandLine].backPipe = true;
@@ -195,7 +215,6 @@ int parseCommand(vector<string> SeperateInput)
                 parseCommand.push_back(newCommand);
                 parseCommandLine++;
 
-                
                 pipeNumber++; // 紀錄需要創建幾個pipe
             }
             count++;
@@ -206,17 +225,13 @@ int parseCommand(vector<string> SeperateInput)
         count++;
     }
 
-    // for (int i = 0; i < parseCommand.size(); i++)
-    // {
-    //     cout << "i:" << i << endl;
-    //     for (int j = 0; j < parseCommand[i].size(); j++)
-    //     {
-    //         cout << "line " << j << ":" << parseCommand[i][j] << " ";
-    //         cout << endl;
-    //     }
-
-    // }
     int pipeArray[pipeNumber][2];
+    int NumberPipeNeed = -1;
+    for(int j = 0;j<NumberPipeArray.size();j++){
+        if(NumberPipeArray[j].number==0){
+            NumberPipeNeed = NumberPipeArray[j].IndexOfGlobalPipe;
+        }
+    }
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
@@ -231,6 +246,12 @@ int parseCommand(vector<string> SeperateInput)
                 cerr << "pipe generate failed" << endl;
             }
         }
+
+        // TODO fork 前要先確認是否有需要輸入進去的numberPipe使用到
+        //  ! 可能只能讓第一個fork出來的child去串接numberPipe存起來的東西
+        //  ! 還要在他串接起來之後將其close掉 (父母也要)
+        
+
         pid = fork();
         // cout<<"child pid "<< pid<<endl;
         if (pid == 0) // child process
@@ -243,7 +264,7 @@ int parseCommand(vector<string> SeperateInput)
                 close(pipeArray[FPNumber][1]);
                 dup2(pipeArray[FPNumber][0], 0);
                 // cerr<<"dup2 fp endl"<<endl<<endl;
-                // close(pipeArray[FPNumber][0]);
+                close(pipeArray[FPNumber][0]);
             }
 
             // * back Pipe
@@ -254,20 +275,26 @@ int parseCommand(vector<string> SeperateInput)
                 close(pipeArray[BPNumber][0]);
                 dup2(pipeArray[BPNumber][1], 1);
                 // cerr<<"dup2 bp endl"<<endl<<endl;
-                // close(pipeArray[BPNumber][1]);
+                close(pipeArray[BPNumber][1]);
             }
 
-            //TODO: 如果我有number pipe要丟進去;
-            if(parseCommand[i].numberPipe){
-                //TODO 第一步獲取pipe的位置
-                //TODO dup2其out到那個pipe
+            // TODO: 如果我有number pipe要丟進去;
+            if (parseCommand[i].numberPipe)
+            {
                 int NumberPipeIndex = parseCommand[i].numberPipeIndex;
-                close(NumberPipeArray[NumberPipeIndex].UseTOPipe[0]);
-                dup2(NumberPipeArray[NumberPipeIndex].UseTOPipe[1],1);
+                close(pipeArray[NumberPipeIndex][0]);
+                dup2(pipeArray[NumberPipeIndex][1], 1);
+                // cerr<<"dup2 bp endl"<<endl<<endl;
+                close(pipeArray[NumberPipeIndex][1]);
             }
-
-            //! 暫時還沒處理pipe 連接stdin stdout的問題
-            // TODO: 如果有pipe就看是要將輸出對應到哪個pipe
+            
+            //TODO 確認到有需要傳進來的NumberPipe要執行
+            if(i==0 and NumberPipeNeed!=-1){
+                close(GlobalPipe[NumberPipeNeed][1]);
+                dup2(GlobalPipe[NumberPipeNeed][0], 0);
+                // cerr<<"dup2 fp endl"<<endl<<endl;
+                close(GlobalPipe[NumberPipeNeed][0]);
+            }
 
             executeFunction(parseCommand[i]);
             cerr << parseCommand[i].inputCommand[0] << " exec error" << endl;
@@ -281,7 +308,21 @@ int parseCommand(vector<string> SeperateInput)
                 close(pipeArray[parseCommand[i].FP][1]);
             } // sleep(2);
 
-            
+            // TODO 確定所有NumberPipe向前1格 並且在這邊將已經倒數到0的Pipe close 並將 globalPipeUsed 設為 false
+            for (int j = 0; j < NumberPipeArray.size(); j++)
+            {
+                if (NumberPipeArray[j].number == 0)
+                {
+                    int index = NumberPipeArray[j].IndexOfGlobalPipe;
+                    close(GlobalPipe[index][0]);
+                    close(GlobalPipe[index][1]);
+                    GlobalPipeUsed[index] = false;
+                    NumberPipeArray.erase(NumberPipeArray.begin()+j);
+                    continue;
+                }
+                NumberPipeArray[j].number = NumberPipeArray[j].number - 1;
+            }
+
             // cout << "parent process continue to run the next Command" << endl;
         }
         else // fork error
