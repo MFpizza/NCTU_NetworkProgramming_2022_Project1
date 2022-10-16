@@ -1,8 +1,22 @@
-#include "main.h"
+#include <iostream>
+#include <string.h>
+#include <vector>
+#include <sstream>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <filesystem>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <vector>
+#include <fcntl.h>
+using namespace std;
 
+void executeFunction(vector<string> parm);
+int parseCommand(vector<string> SeperateInput);
 /*
 
-TODO: pipe without numberPipe
+TODO: numberPipe withOut !
 
 
 * Seems like multiple pipe need to pass the inputCommand to there child process
@@ -26,8 +40,8 @@ struct myCommandLine
     int BP = -1;                 // Back Pipe number
 
     //* use to implement NumberPipe
-    bool numberPipe = false;
-    int numberPipeIndex = -1;
+    bool numberPipe = false;     // true if there is a number pipe command
+    int numberPipeIndex = -1;    // 還在思考要用甚麼方式來儲存numberPipe
 };
 
 void outputMyCommandLineOfPipe(myCommandLine my)
@@ -36,26 +50,9 @@ void outputMyCommandLineOfPipe(myCommandLine my)
     cout << "backPipe is " << my.backPipe << ",number of Pipe is " << my.BP << endl;
     cout << "frontPipe is " << my.frontPipe << ",number of Pipe is " << my.FP << endl;
 }
-struct sigaction siga;
 
-void f(int sig)
-{
-    printf("Caught signal %d\n", sig);
-}
-
-// sets f as handler to all the possible signals.
-void myfunct(void (*f)(int sig))
-{
-    siga.sa_handler = f;
-    for (int sig = 1; sig <= SIGRTMAX; ++sig)
-    {
-        // this might return -1 and set errno, but we don't care
-        sigaction(sig, &siga, NULL);
-    }
-}
 int main()
 {
-    // myfunct(f);
     clearenv();
     setenv("PATH", "bin:.", 1);
     // printf("%s\n", getenv("PATH"));
@@ -79,28 +76,16 @@ int main()
         {
             token = s.substr(0, pos);
             lineSplit.push_back(token);
-            // myCout(token);
             s.erase(0, pos + delimiter.length());
         }
 
         lineSplit.push_back(s);
-        // myCout(s);
 
         parseCommand(lineSplit);
         //--------------------------------------------------------
 
         cout << "% ";
     }
-}
-
-template <typename T>
-void myCout(T s)
-{
-    bool needCout = true;
-    if (needCout)
-        cout << s << endl;
-    else
-        return;
 }
 
 void executeFunction(myCommandLine tag)
@@ -144,6 +129,17 @@ void executeFunction(myCommandLine tag)
     cerr << " error with command: " << tag.inputCommand[0] << endl;
 }
 
+struct myNumberPipe{
+    int number;
+    int UseTOPipe[2];
+    //TODO : 或許可以將其改成pipe在struct裡面
+    //! 只是這樣子要用C實作的時候挺麻煩
+};
+vector<myNumberPipe> NumberPipeArray;
+// int GlobalPipe[1000][2];
+// //! 未來需要修改成可以調整成要開幾個pipe的方式
+// int GlobalPipeSize = 0;
+
 int parseCommand(vector<string> SeperateInput)
 {
 
@@ -172,7 +168,23 @@ int parseCommand(vector<string> SeperateInput)
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
+            // * 實作numberPipe
+            if (SeperateInput[count].size() > 1)
+            { 
+                int Number = (SeperateInput[count][1])-'0';
+                cerr<<Number<<endl;
+                parseCommand[parseCommandLine].numberPipe = true;
+                parseCommand[parseCommandLine].numberPipeIndex = NumberPipeArray.size();
+            
+                myNumberPipe nP;
+                nP.number = Number;
+                if(pipe(nP.UseTOPipe)==-1){
+                    cerr<<"pipe error with numberPipe"<<endl<<endl;
+                }
+                NumberPipeArray.push_back(nP);
+            }
 
+            //* 實作普通的pipe 
             if (count != SeperateInput.size() - 1)
             {
                 parseCommand[parseCommandLine].backPipe = true;
@@ -183,9 +195,10 @@ int parseCommand(vector<string> SeperateInput)
                 parseCommand.push_back(newCommand);
                 parseCommandLine++;
 
-                count++;
+                
                 pipeNumber++; // 紀錄需要創建幾個pipe
             }
+            count++;
             //! 正在處理pipe 所以跳過pipe資訊並跳過numberPipe
         }
         // cout<<SeperateInput[count]<<endl;
@@ -244,6 +257,15 @@ int parseCommand(vector<string> SeperateInput)
                 // close(pipeArray[BPNumber][1]);
             }
 
+            //TODO: 如果我有number pipe要丟進去;
+            if(parseCommand[i].numberPipe){
+                //TODO 第一步獲取pipe的位置
+                //TODO dup2其out到那個pipe
+                int NumberPipeIndex = parseCommand[i].numberPipeIndex;
+                close(NumberPipeArray[NumberPipeIndex].UseTOPipe[0]);
+                dup2(NumberPipeArray[NumberPipeIndex].UseTOPipe[1],1);
+            }
+
             //! 暫時還沒處理pipe 連接stdin stdout的問題
             // TODO: 如果有pipe就看是要將輸出對應到哪個pipe
 
@@ -253,11 +275,13 @@ int parseCommand(vector<string> SeperateInput)
         }
         else if (pid > 0) // parent  process
         {
-            if (i == 1)
+            if (parseCommand[i].frontPipe)
             {
-                close(pipeArray[0][0]);
-                close(pipeArray[0][1]);
+                close(pipeArray[parseCommand[i].FP][0]);
+                close(pipeArray[parseCommand[i].FP][1]);
             } // sleep(2);
+
+            
             // cout << "parent process continue to run the next Command" << endl;
         }
         else // fork error
