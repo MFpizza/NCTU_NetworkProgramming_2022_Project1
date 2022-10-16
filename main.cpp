@@ -38,21 +38,24 @@ void outputMyCommandLineOfPipe(myCommandLine my)
 }
 struct sigaction siga;
 
-void f(int sig) {
+void f(int sig)
+{
     printf("Caught signal %d\n", sig);
 }
 
 // sets f as handler to all the possible signals.
-void myfunct(void(*f)(int sig)) {
+void myfunct(void (*f)(int sig))
+{
     siga.sa_handler = f;
-    for (int sig = 1; sig <= SIGRTMAX; ++sig) {
+    for (int sig = 1; sig <= SIGRTMAX; ++sig)
+    {
         // this might return -1 and set errno, but we don't care
         sigaction(sig, &siga, NULL);
     }
 }
 int main()
 {
-    //myfunct(f);
+    // myfunct(f);
     clearenv();
     setenv("PATH", "bin:.", 1);
     // printf("%s\n", getenv("PATH"));
@@ -132,12 +135,13 @@ void executeFunction(myCommandLine tag)
     arg[tag.inputCommand.size()] = NULL;
 
     char **show = (char **)arg;
-    // cerr<<" ready to execute"<<endl;
+    // cerr<<" ready to execute "<<tag.inputCommand[0]<<endl;
     if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
         cerr << "Unknown Command" << endl;
         exit(-1);
     };
+    cerr << " error with command: " << tag.inputCommand[0] << endl;
 }
 
 int parseCommand(vector<string> SeperateInput)
@@ -168,17 +172,20 @@ int parseCommand(vector<string> SeperateInput)
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
-            parseCommand[parseCommandLine].backPipe = true;
-            parseCommand[parseCommandLine].BP = pipeNumber;
-            myCommandLine newCommand;
-            newCommand.FP = pipeNumber;
-            newCommand.frontPipe = true;
-            parseCommand.push_back(newCommand);
-            parseCommandLine++;
 
-            count++;
-            pipeNumber++; // 紀錄需要創建幾個pipe
+            if (count != SeperateInput.size() - 1)
+            {
+                parseCommand[parseCommandLine].backPipe = true;
+                parseCommand[parseCommandLine].BP = pipeNumber;
+                myCommandLine newCommand;
+                newCommand.FP = pipeNumber;
+                newCommand.frontPipe = true;
+                parseCommand.push_back(newCommand);
+                parseCommandLine++;
 
+                count++;
+                pipeNumber++; // 紀錄需要創建幾個pipe
+            }
             //! 正在處理pipe 所以跳過pipe資訊並跳過numberPipe
         }
         // cout<<SeperateInput[count]<<endl;
@@ -196,11 +203,10 @@ int parseCommand(vector<string> SeperateInput)
     //     }
 
     // }
+    int pipeArray[pipeNumber][2];
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        int pipeArray[pipeNumber][2];
-
         // outputMyCommandLineOfPipe(parseCommand[i]);
 
         if (parseCommand[i].backPipe)
@@ -224,7 +230,7 @@ int parseCommand(vector<string> SeperateInput)
                 close(pipeArray[FPNumber][1]);
                 dup2(pipeArray[FPNumber][0], 0);
                 // cerr<<"dup2 fp endl"<<endl<<endl;
-                close(pipeArray[FPNumber][0]);
+                // close(pipeArray[FPNumber][0]);
             }
 
             // * back Pipe
@@ -233,9 +239,9 @@ int parseCommand(vector<string> SeperateInput)
                 int BPNumber = parseCommand[i].BP;
                 // cout<<"back Pipe "<< BPNumber<<endl;
                 close(pipeArray[BPNumber][0]);
-                dup2(pipeArray[BPNumber][1],1);
+                dup2(pipeArray[BPNumber][1], 1);
                 // cerr<<"dup2 bp endl"<<endl<<endl;
-                close(pipeArray[BPNumber][1]);
+                // close(pipeArray[BPNumber][1]);
             }
 
             //! 暫時還沒處理pipe 連接stdin stdout的問題
@@ -247,9 +253,11 @@ int parseCommand(vector<string> SeperateInput)
         }
         else if (pid > 0) // parent  process
         {
-            // close(pipeArray[0][0]);
-            // close(pipeArray[0][1]);
-            sleep(2);
+            if (i == 1)
+            {
+                close(pipeArray[0][0]);
+                close(pipeArray[0][1]);
+            } // sleep(2);
             // cout << "parent process continue to run the next Command" << endl;
         }
         else // fork error
@@ -259,14 +267,14 @@ int parseCommand(vector<string> SeperateInput)
         }
     }
 
-    cout << endl
-         << "all command run" << endl;
+    // cout << endl
+    //      << "all command run" << endl;
 
     //* 等待所有child process exit
     while ((wpid = wait(&status)) > 0)
     {
     };
-    cout << endl
-         << "child process every exit" << endl;
+    // cout << endl
+    //      << "child process every exit" << endl;
     return 1;
 }
