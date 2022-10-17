@@ -36,22 +36,18 @@ TODO: 我好像把numberPipe的一切想得太美好，回去可能有很多bug�
 struct myCommandLine
 {
     vector<string> inputCommand; // store the command line
-    bool backPipe = false;       // true if there is a pipe command in front of the command
-    bool frontPipe = false;      // true if there is a pipe command behind of the command
+    bool backPipe = false;       // true if there is a pipe command behind of the command
+    bool frontPipe = false;      // true if there is a pipe command in front of the command
     int FP = -1;                 // Front Pipe number
     int BP = -1;                 // Back Pipe number
 
     //* use to implement NumberPipe
     bool numberPipe = false;  // true if there is a number pipe command
     int numberPipeIndex = -1; // 還在思考要用甚麼方式來儲存numberPipe
-};
 
-void outputMyCommandLineOfPipe(myCommandLine my)
-{
-    cout << "Pipe information:\n";
-    cout << "backPipe is " << my.backPipe << ",number of Pipe is " << my.BP << endl;
-    cout << "frontPipe is " << my.frontPipe << ",number of Pipe is " << my.FP << endl;
-}
+    //* use to implement cerr to pipe
+    bool errPipeNeed = false; // true if there is a pipe command be
+};
 
 int main()
 {
@@ -84,7 +80,6 @@ int main()
         lineSplit.push_back(s);
 
         parserCommand(lineSplit);
-        //--------------------------------------------------------
 
         cout << "% ";
     }
@@ -116,21 +111,15 @@ void executeFunction(myCommandLine tag)
         }
 
         arg[i] = tag.inputCommand[i].c_str();
-        // cout<<tag[i].c_str()<<endl;
-        // cout<<argv[i]<<endl;
     }
     arg[tag.inputCommand.size()] = NULL;
 
-    char **show = (char **)arg;
-    // cerr<<" ready to execute "<<tag.inputCommand[0]<<endl;
     if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
         cerr << "Unknown Command: [" << tag.inputCommand[0] << "]." << endl;
         exit(-1);
     };
-    // cerr << " error with command: " << tag.inputCommand[0] << endl;
 }
-
 struct myNumberPipe
 {
     int number;
@@ -198,6 +187,11 @@ int parserCommand(vector<string> SeperateInput)
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
+            if (SeperateInput[count][0] == '!')
+            {
+                parseCommand[parseCommandLine].errPipeNeed = true;
+            }
+
             // * 實作numberPipe 在最尾端
             if (SeperateInput[count].size() > 1)
             {
@@ -206,9 +200,6 @@ int parserCommand(vector<string> SeperateInput)
                 ss << SeperateInput[count];
                 int Number;
                 ss >> Number;
-                // cerr<<Number<<endl;
-                // TODO 把剩餘的code丟到 IfNumberPipeMiddle 裡面去 從count+1開始到SeperateInput.size()-1
-                
 
                 bool hasPipe = false;
                 parseCommand[parseCommandLine].numberPipe = true;
@@ -225,7 +216,6 @@ int parserCommand(vector<string> SeperateInput)
                 if (!hasPipe)
                 {
                     int GlobalPipeIndex = findTheGlobalPipeCanUse();
-                    // cerr<<"GlobalPipeIndex: "<<GlobalPipeIndex<<endl;
                     myNumberPipe nP;
                     nP.number = Number;
                     nP.IndexOfGlobalPipe = GlobalPipeIndex;
@@ -241,11 +231,7 @@ int parserCommand(vector<string> SeperateInput)
                     {
                         IfNumberPipeMiddle.push_back(SeperateInput[j]);
                     }
-                    SeperateInput.erase(SeperateInput.begin()+count, SeperateInput.end());
-                    // cerr<<count<<" "<<SeperateInput.size()<<endl;
-                    // for(int j= 0; j < IfNumberPipeMiddle.size(); j++){
-                    //     cerr<<IfNumberPipeMiddle[j]<<endl;
-                    // }
+                    SeperateInput.erase(SeperateInput.begin() + count, SeperateInput.end());
                     break;
                 }
             }
@@ -290,12 +276,9 @@ int parserCommand(vector<string> SeperateInput)
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        // outputMyCommandLineOfPipe(parseCommand[i]);
-
         if (parseCommand[i].backPipe)
         {
             int fdPipe = pipe(pipeArray[parseCommand[i].BP]);
-            // cout<<fdPipe<<endl;
             if (fdPipe == -1)
             {
                 cerr << "pipe generate failed" << endl;
@@ -303,7 +286,6 @@ int parserCommand(vector<string> SeperateInput)
         }
 
         pid = fork();
-        // cout<<"child pid "<< pid<<endl;
         if (pid == 0) // child process
         {
 
@@ -311,10 +293,8 @@ int parserCommand(vector<string> SeperateInput)
             if (parseCommand[i].frontPipe)
             {
                 int FPNumber = parseCommand[i].FP;
-                // cout<<"front pipe "<< FPNumber<<endl;
                 close(pipeArray[FPNumber][1]);
                 dup2(pipeArray[FPNumber][0], 0);
-                // cerr<<"dup2 fp endl"<<endl<<endl;
                 close(pipeArray[FPNumber][0]);
             }
 
@@ -322,21 +302,23 @@ int parserCommand(vector<string> SeperateInput)
             if (parseCommand[i].backPipe)
             {
                 int BPNumber = parseCommand[i].BP;
-                // cout<<"back Pipe "<< BPNumber<<endl;
                 close(pipeArray[BPNumber][0]);
                 dup2(pipeArray[BPNumber][1], 1);
-                // cerr<<"dup2 bp endl"<<endl<<endl;
+                if(parseCommand[i].errPipeNeed){
+                    dup2(GlobalPipe[BPNumber][1],2);
+                }
                 close(pipeArray[BPNumber][1]);
             }
 
             // * number Pipe behind
             if (parseCommand[i].numberPipe)
             {
-                // cerr<<parseCommand[i].inputCommand[0]<<" "<<parseCommand[i].numberPipeIndex<<endl;
                 int NumberPipeIndex = parseCommand[i].numberPipeIndex;
                 close(GlobalPipe[NumberPipeIndex][0]);
                 dup2(GlobalPipe[NumberPipeIndex][1], 1);
-                // cerr<<"dup2 bp endl"<<endl<<endl;
+                if(parseCommand[i].errPipeNeed){
+                    dup2(GlobalPipe[NumberPipeIndex][1],2);
+                }
                 close(GlobalPipe[NumberPipeIndex][1]);
             }
 
@@ -346,13 +328,10 @@ int parserCommand(vector<string> SeperateInput)
                 int pipeIndex = NumberPipeArray[NumberPipeNeed].IndexOfGlobalPipe;
                 close(GlobalPipe[pipeIndex][1]);
                 dup2(GlobalPipe[pipeIndex][0], 0);
-                // cerr<<"dup2 fp endl"<<endl<<endl;
                 close(GlobalPipe[pipeIndex][0]);
             }
 
             executeFunction(parseCommand[i]);
-            cerr << parseCommand[i].inputCommand[0] << " exec error" << endl;
-            exit(0);
         }
         else if (pid > 0) // parent  process
         {
@@ -374,8 +353,6 @@ int parserCommand(vector<string> SeperateInput)
                     NumberPipeArray.erase(NumberPipeArray.begin() + j);
                 }
             }
-
-            // cout << "parent process continue to run the next Command" << endl;
         }
         else // fork error
         {
@@ -384,15 +361,10 @@ int parserCommand(vector<string> SeperateInput)
         }
     }
 
-    // cout << endl
-    //      << "all command run" << endl;
-
     //* 等待所有child process exit
     while ((wpid = wait(&status)) > 0)
     {
     };
-    // cout << endl
-    //      << "child process every exit" << endl;
     if (sameLine)
     {
         parserCommand(IfNumberPipeMiddle);
