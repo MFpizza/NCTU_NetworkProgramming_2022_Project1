@@ -1,0 +1,7 @@
+   1 bin
+   2 main.cpp
+   3 npshell
+   4 run.sh
+   5 test.html
+   6 test1.txt
+   7 test2.txt

@@ -13,7 +13,7 @@
 using namespace std;
 
 void executeFunction(vector<string> parm);
-int parseCommand(vector<string> SeperateInput);
+int parserCommand(vector<string> SeperateInput);
 /*
 
 TODO: numberPipe withOut !
@@ -63,6 +63,11 @@ int main()
     cout << "% ";
     while (getline(cin, s))
     {
+        if (s == "")
+        {
+            cout << "% ";
+            continue;
+        }
         vector<string> lineSplit;
         // 分割當前的指令
         string delimiter = " ";
@@ -78,7 +83,7 @@ int main()
 
         lineSplit.push_back(s);
 
-        parseCommand(lineSplit);
+        parserCommand(lineSplit);
         //--------------------------------------------------------
 
         cout << "% ";
@@ -133,7 +138,6 @@ struct myNumberPipe
 };
 vector<myNumberPipe> NumberPipeArray;
 int GlobalPipe[1000][2];
-// //! 未來需要修改成可以調整成要開幾個pipe的方式
 bool GlobalPipeUsed[1000];
 
 int findTheGlobalPipeCanUse()
@@ -157,8 +161,13 @@ int findTheGlobalPipeCanUse()
     return -1;
 }
 
-int parseCommand(vector<string> SeperateInput)
+int parserCommand(vector<string> SeperateInput)
 {
+    // TODO 將所有numberPipe向前一格
+    for (int j = 0; j < NumberPipeArray.size(); j++)
+    {
+        NumberPipeArray[j].number = NumberPipeArray[j].number - 1;
+    }
 
     if (SeperateInput[0] == "printenv")
     {
@@ -181,24 +190,33 @@ int parseCommand(vector<string> SeperateInput)
     int count = 0, parseCommandLine = 0, pipeNumber = 0;
     vector<myCommandLine> parseCommand;
     parseCommand.resize(1);
+
+    //用來儲存 NumberPipe後面的指令
+    bool sameLine = false;
+    vector<string> IfNumberPipeMiddle;
     while (count < SeperateInput.size())
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
         {
-            // * 實作numberPipe
+            // * 實作numberPipe 在最尾端
             if (SeperateInput[count].size() > 1)
             {
-                int Number = (SeperateInput[count][1]) - '0';
+                stringstream ss;
+                SeperateInput[count].erase(SeperateInput[count].begin());
+                ss << SeperateInput[count];
+                int Number;
+                ss >> Number;
                 // cerr<<Number<<endl;
-
-                // TODO: 先將所有numberPipeArray看有沒有同樣number的丟進同一個
-                // TODO 如果沒有同樣number的再去創建新的GlobalPipe使用
+                // TODO 把剩餘的code丟到 IfNumberPipeMiddle 裡面去 從count+1開始到SeperateInput.size()-1
+                
 
                 bool hasPipe = false;
                 parseCommand[parseCommandLine].numberPipe = true;
 
-                for(int k=0;k<NumberPipeArray.size();k++){
-                    if(NumberPipeArray[k].number==Number){
+                for (int k = 0; k < NumberPipeArray.size(); k++)
+                {
+                    if (NumberPipeArray[k].number == Number)
+                    {
                         hasPipe = true;
                         parseCommand[parseCommandLine].numberPipeIndex = k;
                     }
@@ -215,16 +233,34 @@ int parseCommand(vector<string> SeperateInput)
 
                     parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
                 }
+
+                if (count != SeperateInput.size() - 1)
+                {
+                    sameLine = true;
+                    for (int j = count + 1; j < SeperateInput.size(); j++)
+                    {
+                        IfNumberPipeMiddle.push_back(SeperateInput[j]);
+                    }
+                    SeperateInput.erase(SeperateInput.begin()+count, SeperateInput.end());
+                    // cerr<<count<<" "<<SeperateInput.size()<<endl;
+                    // for(int j= 0; j < IfNumberPipeMiddle.size(); j++){
+                    //     cerr<<IfNumberPipeMiddle[j]<<endl;
+                    // }
+                    break;
+                }
             }
 
             //* 實作普通的pipe
-            if (count != SeperateInput.size() - 1)
+            else if (count != SeperateInput.size() - 1)
             {
                 parseCommand[parseCommandLine].backPipe = true;
                 parseCommand[parseCommandLine].BP = pipeNumber;
                 myCommandLine newCommand;
                 newCommand.FP = pipeNumber;
                 newCommand.frontPipe = true;
+
+                // TODO numberPipe
+
                 parseCommand.push_back(newCommand);
                 parseCommandLine++;
 
@@ -235,7 +271,6 @@ int parseCommand(vector<string> SeperateInput)
             {
                 break;
             }
-            //! 正在處理pipe 所以跳過pipe資訊並跳過numberPipe
         }
         // cout<<SeperateInput[count]<<endl;
         parseCommand[parseCommandLine].inputCommand.push_back(SeperateInput[count]);
@@ -266,11 +301,6 @@ int parseCommand(vector<string> SeperateInput)
                 cerr << "pipe generate failed" << endl;
             }
         }
-
-        // TODO fork 前要先確認是否有需要輸入進去的numberPipe使用到
-        //  ! 可能只能讓第一個fork出來的child去串接numberPipe存起來的東西
-        //  ! 還要在他串接起來之後將其close掉 (父母也要)
-        // cerr<<"ready to fork"<<endl;
 
         pid = fork();
         // cout<<"child pid "<< pid<<endl;
@@ -342,9 +372,7 @@ int parseCommand(vector<string> SeperateInput)
                     close(GlobalPipe[index][1]);
                     GlobalPipeUsed[index] = false;
                     NumberPipeArray.erase(NumberPipeArray.begin() + j);
-                    continue;
                 }
-                NumberPipeArray[j].number = NumberPipeArray[j].number - 1;
             }
 
             // cout << "parent process continue to run the next Command" << endl;
@@ -365,5 +393,9 @@ int parseCommand(vector<string> SeperateInput)
     };
     // cout << endl
     //      << "child process every exit" << endl;
+    if (sameLine)
+    {
+        parserCommand(IfNumberPipeMiddle);
+    }
     return 1;
 }

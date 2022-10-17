@@ -1,9 +1,0 @@
-a.txt
-bin
-commands
-main.cpp
-main.h
-npshell
-run.sh
-test.html
-testCin.txt
