@@ -14,6 +14,7 @@ using namespace std;
 
 void executeFunction(vector<string> parm);
 int parserCommand(vector<string> SeperateInput);
+void seperateSpace(string s);
 /*
 
 TODO: numberPipe withOut !
@@ -49,22 +50,8 @@ struct myCommandLine
     bool errPipeNeed = false; // true if there is a pipe command be
 };
 
-int main()
-{
-    clearenv();
-    setenv("PATH", "bin:.", 1);
-
-    // tmp variable
-    string s;
-    cout << "% ";
-    while (getline(cin, s))
-    {
-        if (s == "")
-        {
-            cout << "% ";
-            continue;
-        }
-        vector<string> lineSplit;
+void seperateSpace(string s){
+    vector<string> lineSplit;
         // 分割當前的指令
         string delimiter = " ";
 
@@ -80,7 +67,25 @@ int main()
         lineSplit.push_back(s);
 
         parserCommand(lineSplit);
+}
 
+int main()
+{
+    clearenv();
+    setenv("PATH", "bin:.", 1);
+
+    // tmp variable
+    string s;
+    cout << "% ";
+    while (getline(cin, s))
+    {
+        if (s == "")
+        {
+            cout << "% ";
+            continue;
+        }
+        
+        seperateSpace(s);
         cout << "% ";
     }
 }
@@ -113,10 +118,10 @@ void executeFunction(myCommandLine tag)
         arg[i] = tag.inputCommand[i].c_str();
     }
     arg[tag.inputCommand.size()] = NULL;
-
+    cerr<<"ready exec"<<endl;
     if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
     {
-        cerr << "Unknown Command: [" << tag.inputCommand[0] << "]." << endl;
+        cerr << "Unknown command: [" << tag.inputCommand[0] << "]." << endl;
         exit(-1);
     };
 }
@@ -160,12 +165,17 @@ int parserCommand(vector<string> SeperateInput)
 
     if (SeperateInput[0] == "printenv")
     {
-        printf("%s\n", getenv(SeperateInput[1].c_str()));
+        if(getenv(SeperateInput[1].c_str())!=NULL){
+            printf("%s\n", getenv(SeperateInput[1].c_str()));
+        }
         return 1;
     }
     else if (SeperateInput[0] == "setenv")
     {
-        setenv(SeperateInput[1].c_str(), SeperateInput[2].c_str(), 1);
+        if(setenv(SeperateInput[1].c_str(), SeperateInput[2].c_str(), 1)==-1){
+            cerr<<"setenv error"<<endl;
+            exit(-1);
+        };
         return 1;
     }
     else if (SeperateInput[0] == "exit")
@@ -192,7 +202,7 @@ int parserCommand(vector<string> SeperateInput)
                 parseCommand[parseCommandLine].errPipeNeed = true;
             }
 
-            // * 實作numberPipe 在最尾端
+            // * 實作numberPipe 
             if (SeperateInput[count].size() > 1)
             {
                 stringstream ss;
@@ -220,7 +230,6 @@ int parserCommand(vector<string> SeperateInput)
                     nP.number = Number;
                     nP.IndexOfGlobalPipe = GlobalPipeIndex;
                     NumberPipeArray.push_back(nP);
-
                     parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
                 }
 
@@ -313,6 +322,7 @@ int parserCommand(vector<string> SeperateInput)
             // * number Pipe behind
             if (parseCommand[i].numberPipe)
             {
+                // cerr<<"numberpipe"<<endl;
                 int NumberPipeIndex = parseCommand[i].numberPipeIndex;
                 close(GlobalPipe[NumberPipeIndex][0]);
                 dup2(GlobalPipe[NumberPipeIndex][1], 1);
@@ -360,14 +370,15 @@ int parserCommand(vector<string> SeperateInput)
             exit(1);
         }
     }
+    if (sameLine)
+    {
+        parserCommand(IfNumberPipeMiddle);
+    }
 
     //* 等待所有child process exit
     while ((wpid = wait(&status)) > 0)
     {
     };
-    if (sameLine)
-    {
-        parserCommand(IfNumberPipeMiddle);
-    }
+    
     return 1;
 }
