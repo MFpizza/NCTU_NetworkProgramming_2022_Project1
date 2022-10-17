@@ -130,8 +130,6 @@ struct myNumberPipe
 {
     int number;
     int IndexOfGlobalPipe;
-    // TODO : 或許可以將其改成pipe在struct裡面
-    //! 只是這樣子要用C實作的時候挺麻煩
 };
 vector<myNumberPipe> NumberPipeArray;
 int GlobalPipe[1000][2];
@@ -193,15 +191,30 @@ int parseCommand(vector<string> SeperateInput)
                 int Number = (SeperateInput[count][1]) - '0';
                 // cerr<<Number<<endl;
 
-                int GlobalPipeIndex = findTheGlobalPipeCanUse();
+                // TODO: 先將所有numberPipeArray看有沒有同樣number的丟進同一個
+                // TODO 如果沒有同樣number的再去創建新的GlobalPipe使用
 
-                myNumberPipe nP;
-                nP.number = Number;
-                nP.IndexOfGlobalPipe = GlobalPipeIndex;
-                NumberPipeArray.push_back(nP);
-
+                bool hasPipe = false;
                 parseCommand[parseCommandLine].numberPipe = true;
-                parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
+
+                for(int k=0;k<NumberPipeArray.size();k++){
+                    if(NumberPipeArray[k].number==Number){
+                        hasPipe = true;
+                        parseCommand[parseCommandLine].numberPipeIndex = k;
+                    }
+                }
+
+                if (!hasPipe)
+                {
+                    int GlobalPipeIndex = findTheGlobalPipeCanUse();
+                    // cerr<<"GlobalPipeIndex: "<<GlobalPipeIndex<<endl;
+                    myNumberPipe nP;
+                    nP.number = Number;
+                    nP.IndexOfGlobalPipe = GlobalPipeIndex;
+                    NumberPipeArray.push_back(nP);
+
+                    parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
+                }
             }
 
             //* 實作普通的pipe
@@ -218,6 +231,10 @@ int parseCommand(vector<string> SeperateInput)
                 pipeNumber++; // 紀錄需要創建幾個pipe
             }
             count++;
+            if (count == SeperateInput.size())
+            {
+                break;
+            }
             //! 正在處理pipe 所以跳過pipe資訊並跳過numberPipe
         }
         // cout<<SeperateInput[count]<<endl;
@@ -227,9 +244,12 @@ int parseCommand(vector<string> SeperateInput)
 
     int pipeArray[pipeNumber][2];
     int NumberPipeNeed = -1;
-    for(int j = 0;j<NumberPipeArray.size();j++){
-        if(NumberPipeArray[j].number==0){
+    for (int j = 0; j < NumberPipeArray.size(); j++)
+    {
+        if (NumberPipeArray[j].number == 0)
+        {
             NumberPipeNeed = NumberPipeArray[j].IndexOfGlobalPipe;
+            break;
         }
     }
 
@@ -250,12 +270,13 @@ int parseCommand(vector<string> SeperateInput)
         // TODO fork 前要先確認是否有需要輸入進去的numberPipe使用到
         //  ! 可能只能讓第一個fork出來的child去串接numberPipe存起來的東西
         //  ! 還要在他串接起來之後將其close掉 (父母也要)
-        
+        // cerr<<"ready to fork"<<endl;
 
         pid = fork();
         // cout<<"child pid "<< pid<<endl;
         if (pid == 0) // child process
         {
+
             // * front Pipe
             if (parseCommand[i].frontPipe)
             {
@@ -278,22 +299,25 @@ int parseCommand(vector<string> SeperateInput)
                 close(pipeArray[BPNumber][1]);
             }
 
-            // TODO: 如果我有number pipe要丟進去;
+            // * number Pipe behind
             if (parseCommand[i].numberPipe)
             {
+                // cerr<<parseCommand[i].inputCommand[0]<<" "<<parseCommand[i].numberPipeIndex<<endl;
                 int NumberPipeIndex = parseCommand[i].numberPipeIndex;
-                close(pipeArray[NumberPipeIndex][0]);
-                dup2(pipeArray[NumberPipeIndex][1], 1);
+                close(GlobalPipe[NumberPipeIndex][0]);
+                dup2(GlobalPipe[NumberPipeIndex][1], 1);
                 // cerr<<"dup2 bp endl"<<endl<<endl;
-                close(pipeArray[NumberPipeIndex][1]);
+                close(GlobalPipe[NumberPipeIndex][1]);
             }
-            
-            //TODO 確認到有需要傳進來的NumberPipe要執行
-            if(i==0 and NumberPipeNeed!=-1){
-                close(GlobalPipe[NumberPipeNeed][1]);
-                dup2(GlobalPipe[NumberPipeNeed][0], 0);
+
+            //  * handle numberPipe stdIn
+            if (i == 0 && NumberPipeNeed != -1)
+            {
+                int pipeIndex = NumberPipeArray[NumberPipeNeed].IndexOfGlobalPipe;
+                close(GlobalPipe[pipeIndex][1]);
+                dup2(GlobalPipe[pipeIndex][0], 0);
                 // cerr<<"dup2 fp endl"<<endl<<endl;
-                close(GlobalPipe[NumberPipeNeed][0]);
+                close(GlobalPipe[pipeIndex][0]);
             }
 
             executeFunction(parseCommand[i]);
@@ -317,7 +341,7 @@ int parseCommand(vector<string> SeperateInput)
                     close(GlobalPipe[index][0]);
                     close(GlobalPipe[index][1]);
                     GlobalPipeUsed[index] = false;
-                    NumberPipeArray.erase(NumberPipeArray.begin()+j);
+                    NumberPipeArray.erase(NumberPipeArray.begin() + j);
                     continue;
                 }
                 NumberPipeArray[j].number = NumberPipeArray[j].number - 1;
