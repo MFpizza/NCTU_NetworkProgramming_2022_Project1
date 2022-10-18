@@ -1,2 +1,2 @@
 main:
-	g++ main.cpp -o npshell
+	g++ npshell.cpp -o npshell
