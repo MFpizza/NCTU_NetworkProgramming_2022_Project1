@@ -12,11 +12,8 @@
 #include <fcntl.h>
 using namespace std;
 
-void executeFunction(vector<string> parm);
-int parserCommand(vector<string> SeperateInput);
-void seperateSpace(string s);
-/*
 
+/*
 TODO: numberPipe withOut !
 
 * Seems like multiple pipe need to pass the inputCommand to there child process
@@ -31,8 +28,13 @@ TODO: 讓每個child process在其parent process還在運行的時候就透過pi
 
 TODO: 我好像把numberPipe的一切想得太美好，回去可能有很多bug或inform要確認
 ! 使用vector去存numberPipe會遇到兩個以上的numberPipe沒法在第一個做完之後去erase numberPipeArray
-
 */
+
+struct myNumberPipe
+{
+    int number;
+    int IndexOfGlobalPipe;
+};
 
 struct myCommandLine
 {
@@ -50,9 +52,33 @@ struct myCommandLine
     bool errPipeNeed = false; // true if there is a pipe command be
 };
 
-void seperateSpace(string s){
-    vector<string> lineSplit;
+void executeFunction(myCommandLine tag);
+int parserCommand(vector<string> SeperateInput);
+
+void signalHandler(int sig){
+	pid_t pid = wait(NULL);
+    // cout<<pid<<endl;
+}
+
+int main()
+{   
+    signal(SIGCHLD,signalHandler);
+    clearenv();
+    setenv("PATH", "bin:.", 1);
+
+    // tmp variable
+    string s;
+    cout << "% ";
+    while (getline(cin, s))
+    {
+        if (s == "")
+        {
+            cout << "% ";
+            continue;
+        }
+
         // 分割當前的指令
+        vector<string> lineSplit;
         string delimiter = " ";
 
         size_t pos = 0;
@@ -67,69 +93,11 @@ void seperateSpace(string s){
         lineSplit.push_back(s);
 
         parserCommand(lineSplit);
-}
 
-int main()
-{
-    clearenv();
-    setenv("PATH", "bin:.", 1);
-
-    // tmp variable
-    string s;
-    cout << "% ";
-    while (getline(cin, s))
-    {
-        if (s == "")
-        {
-            cout << "% ";
-            continue;
-        }
-        
-        seperateSpace(s);
         cout << "% ";
     }
 }
 
-void executeFunction(myCommandLine tag)
-{
-    // cerr<< tag.inputCommand[0]<<endl;
-    const char **arg = new const char *[tag.inputCommand.size() + 1];
-    int fd;
-    for (int i = 0; i < tag.inputCommand.size(); i++)
-    {
-        // TODO: File Rediretion
-        if (tag.inputCommand[i] == ">")
-        {
-            fd = open(tag.inputCommand[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
-            if (fd < 0)
-            {
-                cerr << "open failed" << endl;
-            }
-
-            if (dup2(fd, 1) < 0)
-            {
-                cerr << "dup error" << endl;
-            }
-            close(fd);
-            arg[i] = NULL;
-            break;
-        }
-
-        arg[i] = tag.inputCommand[i].c_str();
-    }
-    arg[tag.inputCommand.size()] = NULL;
-    cerr<<"ready exec"<<endl;
-    if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
-    {
-        cerr << "Unknown command: [" << tag.inputCommand[0] << "]." << endl;
-        exit(-1);
-    };
-}
-struct myNumberPipe
-{
-    int number;
-    int IndexOfGlobalPipe;
-};
 vector<myNumberPipe> NumberPipeArray;
 int GlobalPipe[1000][2];
 bool GlobalPipeUsed[1000];
@@ -190,6 +158,8 @@ int parserCommand(vector<string> SeperateInput)
     vector<myCommandLine> parseCommand;
     parseCommand.resize(1);
 
+    bool hasNumberPipe=false;
+
     //用來儲存 NumberPipe後面的指令
     bool sameLine = false;
     vector<string> IfNumberPipeMiddle;
@@ -211,6 +181,7 @@ int parserCommand(vector<string> SeperateInput)
                 int Number;
                 ss >> Number;
 
+                hasNumberPipe = true;
                 bool hasPipe = false;
                 parseCommand[parseCommandLine].numberPipe = true;
 
@@ -273,6 +244,15 @@ int parserCommand(vector<string> SeperateInput)
     }
 
     int pipeArray[pipeNumber][2];
+    // cout<<pipeNumber<<endl<<endl;
+    for(int i=0;i<pipeNumber;i++){
+        int fdPipe = pipe(pipeArray[i]);
+        if (fdPipe == -1)
+        {
+            cerr << "pipe generate failed" << endl;
+        }
+    }
+
     int NumberPipeNeed = -1;
     for (int j = 0; j < NumberPipeArray.size(); j++)
     {
@@ -285,14 +265,16 @@ int parserCommand(vector<string> SeperateInput)
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        if (parseCommand[i].backPipe)
-        {
-            int fdPipe = pipe(pipeArray[parseCommand[i].BP]);
-            if (fdPipe == -1)
-            {
-                cerr << "pipe generate failed" << endl;
-            }
-        }
+        // if (parseCommand[i].backPipe)
+        // {
+        //     int fdPipe = pipe(pipeArray[parseCommand[i].BP]);
+        //     if (fdPipe == -1)
+        //     {
+        //         cerr << "pipe generate failed" << endl;
+        //     }
+        // }
+
+        //TODO 如果最後一個指令是number Pipe 要先輸入下一行指令在開始運行
 
         pid = fork();
         if (pid == 0) // child process
@@ -354,7 +336,7 @@ int parserCommand(vector<string> SeperateInput)
             // TODO 確定所有NumberPipe向前1格 並且在這邊將已經倒數到0的Pipe close 並將 globalPipeUsed 設為 false
             for (int j = 0; j < NumberPipeArray.size(); j++)
             {
-                if (NumberPipeArray[j].number == 0)
+                if (NumberPipeArray[j].number == 0) //可能要看成
                 {
                     int index = NumberPipeArray[j].IndexOfGlobalPipe;
                     close(GlobalPipe[index][0]);
@@ -363,11 +345,15 @@ int parserCommand(vector<string> SeperateInput)
                     NumberPipeArray.erase(NumberPipeArray.begin() + j);
                 }
             }
+            
         }
         else // fork error
         {
-            cerr << "fork error" << endl;
-            exit(1);
+            // cerr << "fork error" << endl;
+            i--;
+            continue;
+            // sleep(10000);
+            // exit(1);
         }
     }
     if (sameLine)
@@ -375,10 +361,45 @@ int parserCommand(vector<string> SeperateInput)
         parserCommand(IfNumberPipeMiddle);
     }
 
-    //* 等待所有child process exit
-    while ((wpid = wait(&status)) > 0)
-    {
-    };
+    if(!hasNumberPipe){
+        while ((wpid = wait(&status)) > 0)
+        {
+        };
+    }
     
     return 1;
+}
+
+void executeFunction(myCommandLine tag)
+{
+    const char **arg = new const char *[tag.inputCommand.size() + 1];
+    for (int i = 0; i < tag.inputCommand.size(); i++)
+    {
+        // TODO: File Rediretion
+        if (tag.inputCommand[i] == ">")
+        {
+            int fd = open(tag.inputCommand[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
+            if (fd < 0)
+            {
+                cerr << "open failed" << endl;
+            }
+
+            if (dup2(fd, 1) < 0)
+            {
+                cerr << "dup error" << endl;
+            }
+            close(fd);
+            arg[i] = NULL;
+            break;
+        }
+
+        arg[i] = tag.inputCommand[i].c_str();
+    }
+    arg[tag.inputCommand.size()] = NULL;
+
+    if (execvp(tag.inputCommand[0].c_str(), (char **)arg) == -1)
+    {
+        cerr << "Unknown command: [" << tag.inputCommand[0] << "]." << endl;
+        exit(-1);
+    };
 }
