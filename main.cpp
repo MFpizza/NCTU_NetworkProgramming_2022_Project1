@@ -12,28 +12,10 @@
 #include <fcntl.h>
 using namespace std;
 
-
-/*
-TODO: numberPipe withOut !
-
-* Seems like multiple pipe need to pass the inputCommand to there child process
-* so that the parent process could do nothing until the all child processes are done
-* then continue to get the next inputCommand from user
-TODO: Pass the inputCommand to the child process
-
-TODO: Make Try to make child process can fork there child process and execute the command
-
-TODO: 讓每個child process在其parent process還在運行的時候就透過pipe去獲取parent的資料，以免沒法pipe太多的東西
-* 參考: https://stackoverflow.com/questions/7292642/grabbing-output-from-exec
-
-TODO: 我好像把numberPipe的一切想得太美好，回去可能有很多bug或inform要確認
-! 使用vector去存numberPipe會遇到兩個以上的numberPipe沒法在第一個做完之後去erase numberPipeArray
-*/
-
 struct myNumberPipe
 {
-    int number;
-    int IndexOfGlobalPipe;
+    int number;            // Next number time to pipe the output
+    int IndexOfGlobalPipe; // Index of global pipe
 };
 
 struct myCommandLine
@@ -43,26 +25,22 @@ struct myCommandLine
     bool frontPipe = false;      // true if there is a pipe command in front of the command
     int FP = -1;                 // Front Pipe number
     int BP = -1;                 // Back Pipe number
-
-    //* use to implement NumberPipe
-    bool numberPipe = false;  // true if there is a number pipe command
-    int numberPipeIndex = -1; // 還在思考要用甚麼方式來儲存numberPipe
-
-    //* use to implement cerr to pipe
-    bool errPipeNeed = false; // true if there is a pipe command be
+    bool numberPipe = false;     // true if there is a number pipe command
+    int numberPipeIndex = -1;    // 還在思考要用甚麼方式來儲存numberPipe
+    bool errPipeNeed = false;    // true if there is a pipe command be
 };
 
 void executeFunction(myCommandLine tag);
 int parserCommand(vector<string> SeperateInput);
 
-void signalHandler(int sig){
-	pid_t pid = wait(NULL);
-    // cout<<pid<<endl;
+void signalHandler(int sig)
+{
+    pid_t pid = wait(NULL);
 }
 
 int main()
-{   
-    signal(SIGCHLD,signalHandler);
+{
+    signal(SIGCHLD, signalHandler);
     clearenv();
     setenv("PATH", "bin:.", 1);
 
@@ -133,15 +111,17 @@ int parserCommand(vector<string> SeperateInput)
 
     if (SeperateInput[0] == "printenv")
     {
-        if(getenv(SeperateInput[1].c_str())!=NULL){
+        if (getenv(SeperateInput[1].c_str()) != NULL)
+        {
             printf("%s\n", getenv(SeperateInput[1].c_str()));
         }
         return 1;
     }
     else if (SeperateInput[0] == "setenv")
     {
-        if(setenv(SeperateInput[1].c_str(), SeperateInput[2].c_str(), 1)==-1){
-            cerr<<"setenv error"<<endl;
+        if (setenv(SeperateInput[1].c_str(), SeperateInput[2].c_str(), 1) == -1)
+        {
+            cerr << "setenv error" << endl;
             exit(-1);
         };
         return 1;
@@ -158,11 +138,11 @@ int parserCommand(vector<string> SeperateInput)
     vector<myCommandLine> parseCommand;
     parseCommand.resize(1);
 
-    bool hasNumberPipe=false;
-
+    bool hasNumberPipe = false;
     //用來儲存 NumberPipe後面的指令
     bool sameLine = false;
     vector<string> IfNumberPipeMiddle;
+
     while (count < SeperateInput.size())
     {
         if (SeperateInput[count][0] == '|' || SeperateInput[count][0] == '!')
@@ -172,7 +152,7 @@ int parserCommand(vector<string> SeperateInput)
                 parseCommand[parseCommandLine].errPipeNeed = true;
             }
 
-            // * 實作numberPipe 
+            // * 實作numberPipe
             if (SeperateInput[count].size() > 1)
             {
                 stringstream ss;
@@ -224,14 +204,11 @@ int parserCommand(vector<string> SeperateInput)
                 myCommandLine newCommand;
                 newCommand.FP = pipeNumber;
                 newCommand.frontPipe = true;
-
-                // TODO numberPipe
-
                 parseCommand.push_back(newCommand);
                 parseCommandLine++;
-
                 pipeNumber++; // 紀錄需要創建幾個pipe
             }
+            
             count++;
             if (count == SeperateInput.size())
             {
@@ -245,7 +222,8 @@ int parserCommand(vector<string> SeperateInput)
 
     int pipeArray[pipeNumber][2];
     // cout<<pipeNumber<<endl<<endl;
-    for(int i=0;i<pipeNumber;i++){
+    for (int i = 0; i < pipeNumber; i++)
+    {
         int fdPipe = pipe(pipeArray[i]);
         if (fdPipe == -1)
         {
@@ -265,16 +243,6 @@ int parserCommand(vector<string> SeperateInput)
 
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        // if (parseCommand[i].backPipe)
-        // {
-        //     int fdPipe = pipe(pipeArray[parseCommand[i].BP]);
-        //     if (fdPipe == -1)
-        //     {
-        //         cerr << "pipe generate failed" << endl;
-        //     }
-        // }
-
-        //TODO 如果最後一個指令是number Pipe 要先輸入下一行指令在開始運行
 
         pid = fork();
         if (pid == 0) // child process
@@ -295,8 +263,9 @@ int parserCommand(vector<string> SeperateInput)
                 int BPNumber = parseCommand[i].BP;
                 close(pipeArray[BPNumber][0]);
                 dup2(pipeArray[BPNumber][1], 1);
-                if(parseCommand[i].errPipeNeed){
-                    dup2(GlobalPipe[BPNumber][1],2);
+                if (parseCommand[i].errPipeNeed)
+                {
+                    dup2(GlobalPipe[BPNumber][1], 2);
                 }
                 close(pipeArray[BPNumber][1]);
             }
@@ -308,8 +277,9 @@ int parserCommand(vector<string> SeperateInput)
                 int NumberPipeIndex = parseCommand[i].numberPipeIndex;
                 close(GlobalPipe[NumberPipeIndex][0]);
                 dup2(GlobalPipe[NumberPipeIndex][1], 1);
-                if(parseCommand[i].errPipeNeed){
-                    dup2(GlobalPipe[NumberPipeIndex][1],2);
+                if (parseCommand[i].errPipeNeed)
+                {
+                    dup2(GlobalPipe[NumberPipeIndex][1], 2);
                 }
                 close(GlobalPipe[NumberPipeIndex][1]);
             }
@@ -331,7 +301,7 @@ int parserCommand(vector<string> SeperateInput)
             {
                 close(pipeArray[parseCommand[i].FP][0]);
                 close(pipeArray[parseCommand[i].FP][1]);
-            } // sleep(2);
+            }
 
             // TODO 確定所有NumberPipe向前1格 並且在這邊將已經倒數到0的Pipe close 並將 globalPipeUsed 設為 false
             for (int j = 0; j < NumberPipeArray.size(); j++)
@@ -345,15 +315,12 @@ int parserCommand(vector<string> SeperateInput)
                     NumberPipeArray.erase(NumberPipeArray.begin() + j);
                 }
             }
-            
         }
         else // fork error
         {
             // cerr << "fork error" << endl;
             i--;
             continue;
-            // sleep(10000);
-            // exit(1);
         }
     }
     if (sameLine)
@@ -361,12 +328,13 @@ int parserCommand(vector<string> SeperateInput)
         parserCommand(IfNumberPipeMiddle);
     }
 
-    if(!hasNumberPipe){
+    if (!hasNumberPipe)
+    {
         while ((wpid = wait(&status)) > 0)
         {
         };
     }
-    
+
     return 1;
 }
 
@@ -375,7 +343,6 @@ void executeFunction(myCommandLine tag)
     const char **arg = new const char *[tag.inputCommand.size() + 1];
     for (int i = 0; i < tag.inputCommand.size(); i++)
     {
-        // TODO: File Rediretion
         if (tag.inputCommand[i] == ">")
         {
             int fd = open(tag.inputCommand[i + 1].c_str(), O_CREAT | O_RDWR | O_TRUNC, S_IREAD | S_IWRITE);
