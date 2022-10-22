@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <vector>
 #include <fcntl.h>
+#include <fstream>
+#include <pwd.h>
 using namespace std;
 
 struct myNumberPipe
@@ -49,7 +51,9 @@ int main()
     cout << "% ";
     while (getline(cin, s))
     {
-        if (s == "")
+ 	out<<s<<endl;
+
+       if (s == "")
         {
             cout << "% ";
             continue;
@@ -230,6 +234,7 @@ int parserCommand(vector<string> SeperateInput)
             cerr << "pipe generate failed" << endl;
         }
     }
+    // cerr<<pipeNumber<<endl;
 
     int NumberPipeNeed = -1;
     for (int j = 0; j < NumberPipeArray.size(); j++)
@@ -241,6 +246,7 @@ int parserCommand(vector<string> SeperateInput)
         }
     }
 
+    // cerr<<parseCommand.size()<<endl;
     for (int i = 0; i < parseCommand.size(); i++)
     {
 
@@ -306,7 +312,7 @@ int parserCommand(vector<string> SeperateInput)
             // TODO 確定所有NumberPipe向前1格 並且在這邊將已經倒數到0的Pipe close 並將 globalPipeUsed 設為 false
             for (int j = 0; j < NumberPipeArray.size(); j++)
             {
-                if (NumberPipeArray[j].number == 0) //可能要看成
+                if (NumberPipeArray[j].number == 0) 
                 {
                     int index = NumberPipeArray[j].IndexOfGlobalPipe;
                     close(GlobalPipe[index][0]);
