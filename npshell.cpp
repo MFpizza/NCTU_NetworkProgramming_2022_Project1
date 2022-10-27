@@ -51,7 +51,7 @@ int main()
     cout << "% ";
     while (getline(cin, s))
     {
- 	out<<s<<endl;
+ 	   
 
        if (s == "")
         {
@@ -70,6 +70,11 @@ int main()
             token = s.substr(0, pos);
             lineSplit.push_back(token);
             s.erase(0, pos + delimiter.length());
+            if (token[0] == '|' && token.size() > 1)
+            {
+                parserCommand(lineSplit);
+                lineSplit.clear();
+            }
         }
 
         lineSplit.push_back(s);
@@ -143,9 +148,6 @@ int parserCommand(vector<string> SeperateInput)
     parseCommand.resize(1);
 
     bool hasNumberPipe = false;
-    //用來儲存 NumberPipe後面的指令
-    bool sameLine = false;
-    vector<string> IfNumberPipeMiddle;
 
     while (count < SeperateInput.size())
     {
@@ -186,17 +188,6 @@ int parserCommand(vector<string> SeperateInput)
                     nP.IndexOfGlobalPipe = GlobalPipeIndex;
                     NumberPipeArray.push_back(nP);
                     parseCommand[parseCommandLine].numberPipeIndex = GlobalPipeIndex;
-                }
-
-                if (count != SeperateInput.size() - 1)
-                {
-                    sameLine = true;
-                    for (int j = count + 1; j < SeperateInput.size(); j++)
-                    {
-                        IfNumberPipeMiddle.push_back(SeperateInput[j]);
-                    }
-                    SeperateInput.erase(SeperateInput.begin() + count, SeperateInput.end());
-                    break;
                 }
             }
 
@@ -328,10 +319,6 @@ int parserCommand(vector<string> SeperateInput)
             i--;
             continue;
         }
-    }
-    if (sameLine)
-    {
-        parserCommand(IfNumberPipeMiddle);
     }
 
     if (!hasNumberPipe)
