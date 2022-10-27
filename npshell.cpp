@@ -23,10 +23,7 @@ struct myNumberPipe
 struct myCommandLine
 {
     vector<string> inputCommand; // store the command line
-    bool backPipe = false;       // true if there is a pipe command behind of the command
-    bool frontPipe = false;      // true if there is a pipe command in front of the command
-    int FP = -1;                 // Front Pipe number
-    int BP = -1;                 // Back Pipe number
+
     bool numberPipe = false;     // true if there is a number pipe command
     int numberPipeIndex = -1;    // 還在思考要用甚麼方式來儲存numberPipe
     bool errPipeNeed = false;    // true if there is a pipe command be
@@ -194,11 +191,7 @@ int parserCommand(vector<string> SeperateInput)
             //* 實作普通的pipe
             else if (count != SeperateInput.size() - 1)
             {
-                parseCommand[parseCommandLine].backPipe = true;
-                parseCommand[parseCommandLine].BP = pipeNumber;
                 myCommandLine newCommand;
-                newCommand.FP = pipeNumber;
-                newCommand.frontPipe = true;
                 parseCommand.push_back(newCommand);
                 parseCommandLine++;
                 pipeNumber++; // 紀錄需要創建幾個pipe
@@ -216,16 +209,6 @@ int parserCommand(vector<string> SeperateInput)
     }
 
     int pipeArray[pipeNumber][2];
-    // cout<<pipeNumber<<endl<<endl;
-    for (int i = 0; i < pipeNumber; i++)
-    {
-        int fdPipe = pipe(pipeArray[i]);
-        if (fdPipe == -1)
-        {
-            cerr << "pipe generate failed" << endl;
-        }
-    }
-    // cerr<<pipeNumber<<endl;
 
     int NumberPipeNeed = -1;
     for (int j = 0; j < NumberPipeArray.size(); j++)
@@ -240,31 +223,32 @@ int parserCommand(vector<string> SeperateInput)
     // cerr<<parseCommand.size()<<endl;
     for (int i = 0; i < parseCommand.size(); i++)
     {
+        if(pipe(pipeArray[i]) < 0)
+            perror("pipe gen failed");
 
         pid = fork();
         if (pid == 0) // child process
         {
 
             // * front Pipe
-            if (parseCommand[i].frontPipe)
+            if (i > 0)
             {
-                int FPNumber = parseCommand[i].FP;
-                close(pipeArray[FPNumber][1]);
-                dup2(pipeArray[FPNumber][0], 0);
-                close(pipeArray[FPNumber][0]);
+                close(pipeArray[i-1][1]);
+                dup2(pipeArray[i-1][0], 0);
+                close(pipeArray[i-1][0]);
             }
 
             // * back Pipe
-            if (parseCommand[i].backPipe)
+            if (i != parseCommand.size()-1)
             {
-                int BPNumber = parseCommand[i].BP;
-                close(pipeArray[BPNumber][0]);
-                dup2(pipeArray[BPNumber][1], 1);
+                
+                close(pipeArray[i][0]);
+                dup2(pipeArray[i][1], 1);
                 if (parseCommand[i].errPipeNeed)
                 {
-                    dup2(GlobalPipe[BPNumber][1], 2);
+                    dup2(GlobalPipe[i][1], 2);
                 }
-                close(pipeArray[BPNumber][1]);
+                close(pipeArray[i][1]);
             }
 
             // * number Pipe behind
@@ -294,10 +278,10 @@ int parserCommand(vector<string> SeperateInput)
         }
         else if (pid > 0) // parent  process
         {
-            if (parseCommand[i].frontPipe)
+            if (i>0)
             {
-                close(pipeArray[parseCommand[i].FP][0]);
-                close(pipeArray[parseCommand[i].FP][1]);
+                close(pipeArray[i-1][0]);
+                close(pipeArray[i-1][1]);
             }
 
             // TODO 確定所有NumberPipe向前1格 並且在這邊將已經倒數到0的Pipe close 並將 globalPipeUsed 設為 false
@@ -316,6 +300,8 @@ int parserCommand(vector<string> SeperateInput)
         else // fork error
         {
             // cerr << "fork error" << endl;
+            close(pipeArray[i][0]);
+            close(pipeArray[i][1]);
             i--;
             continue;
         }
