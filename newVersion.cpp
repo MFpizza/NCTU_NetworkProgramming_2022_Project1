@@ -250,14 +250,16 @@ int parserCommand(vector<string> SeperateInput)
         }
         else if (pid > 0) // parent  process
         {
-            if (parseCommand[i].pipeFrom != NULL)
+            if (i>0)
             {
-                close(parseCommand[i].pipeFrom[1]);
-                close(parseCommand[i].pipeFrom[0]);
+                close(pipeArray[(i-1)%2][0]);
+                close(pipeArray[(i-1)%2][1]);
             }
 
-            if (i == 0 && NumberPipeNeed != -1)
+            if (i == 0 && NumberPipeNeed != -1) 
             {
+                close(GlobalPipe[NumberPipeNeed][0]);
+                close(GlobalPipe[NumberPipeNeed][1]);
                 GlobalPipeUsed[NumberPipeNeed] = false;
                 NumberPipeArray.erase(NumberPipeArray.begin() + indexInNumberPipe);
             }
