@@ -207,27 +207,29 @@ int parserCommand(vector<string> SeperateInput)
     int pipeArray[2][2];
     for (int i = 0; i < parseCommand.size(); i++)
     {
-        if (pipe(pipeArray[i % 2]) < 0)
-            perror("pipe gen failed");
+        // * front Pipe
+        if (i > 0)
+            parseCommand[i].pipeFrom = pipeArray[(i - 1) % 2];
+
+        // * back Pipe
+        if (i != parseCommand.size() - 1){
+            parseCommand[i].pipeTo = pipeArray[i % 2];
+            if (pipe(pipeArray[i % 2]) < 0)
+                perror("pipe gen failed");
+        }
+        
+        //  * handle numberPipe stdIn
+        if (i == 0 && NumberPipeNeed != -1)
+            parseCommand[i].pipeFrom = GlobalPipe[NumberPipeNeed];
+
+        // * number Pipe behind
+        if (parseCommand[i].numberPipe)
+            parseCommand[i].pipeTo = GlobalPipe[parseCommand[i].numberPipeIndex];
+
 
         pid = fork();
         if (pid == 0) // child process
         {
-            // * front Pipe
-            if (i > 0)
-                parseCommand[i].pipeFrom = pipeArray[(i - 1) % 2];
-                
-            // * back Pipe
-            if (i != parseCommand.size() - 1)
-                parseCommand[i].pipeTo = pipeArray[i % 2];
-
-            //  * handle numberPipe stdIn
-            if (i == 0 && NumberPipeNeed != -1)
-                parseCommand[i].pipeFrom = GlobalPipe[NumberPipeNeed];
-
-            // * number Pipe behind
-            if (parseCommand[i].numberPipe)
-                parseCommand[i].pipeTo = GlobalPipe[parseCommand[i].numberPipeIndex];
 
             if (parseCommand[i].pipeTo != NULL)
             {
