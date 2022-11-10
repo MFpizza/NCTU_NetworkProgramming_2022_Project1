@@ -229,7 +229,7 @@ int parserCommand(vector<string> SeperateInput)
                 dup2(pipeArray[i%2][1], 1);
                 if (parseCommand[i].errPipeNeed)
                 {
-                    dup2(GlobalPipe[i%2][1], 2);
+                    dup2(pipeArray[i%2][1], 2);
                 }
                 close(pipeArray[i%2][1]);
             }
