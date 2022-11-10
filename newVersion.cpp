@@ -210,25 +210,24 @@ int parserCommand(vector<string> SeperateInput)
         if (pipe(pipeArray[i % 2]) < 0)
             perror("pipe gen failed");
 
-        // * front Pipe
-        if (i > 0)
-            parseCommand[i].pipeFrom=pipeArray[(i - 1) % 2];
-
-        // * back Pipe
-        if (i != parseCommand.size() - 1)
-            parseCommand[i].pipeTo=pipeArray[i % 2];
-
-        //  * handle numberPipe stdIn
-        if (i == 0 && NumberPipeNeed != -1)
-            parseCommand[i].pipeFrom=GlobalPipe[NumberPipeNeed];
-        
-        // * number Pipe behind
-        if (parseCommand[i].numberPipe)
-            parseCommand[i].pipeTo=GlobalPipe[parseCommand[i].numberPipeIndex];
-
         pid = fork();
         if (pid == 0) // child process
         {
+            // * front Pipe
+            if (i > 0)
+                parseCommand[i].pipeFrom = pipeArray[(i - 1) % 2];
+                
+            // * back Pipe
+            if (i != parseCommand.size() - 1)
+                parseCommand[i].pipeTo = pipeArray[i % 2];
+
+            //  * handle numberPipe stdIn
+            if (i == 0 && NumberPipeNeed != -1)
+                parseCommand[i].pipeFrom = GlobalPipe[NumberPipeNeed];
+
+            // * number Pipe behind
+            if (parseCommand[i].numberPipe)
+                parseCommand[i].pipeTo = GlobalPipe[parseCommand[i].numberPipeIndex];
 
             if (parseCommand[i].pipeTo != NULL)
             {
@@ -250,13 +249,13 @@ int parserCommand(vector<string> SeperateInput)
         }
         else if (pid > 0) // parent  process
         {
-            if (i>0)
+            if (i > 0)
             {
-                close(pipeArray[(i-1)%2][0]);
-                close(pipeArray[(i-1)%2][1]);
+                close(pipeArray[(i - 1) % 2][0]);
+                close(pipeArray[(i - 1) % 2][1]);
             }
 
-            if (i == 0 && NumberPipeNeed != -1) 
+            if (i == 0 && NumberPipeNeed != -1)
             {
                 close(GlobalPipe[NumberPipeNeed][0]);
                 close(GlobalPipe[NumberPipeNeed][1]);
