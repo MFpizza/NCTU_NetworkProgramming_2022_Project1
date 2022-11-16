@@ -5,3 +5,9 @@
 ```
 make
 ```
+### exec
+```
+./npshell
+```
+
+more details see document
